@@ -1,0 +1,1732 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Kernel Trick & Probabilistic SVMs — Interactive Lab</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-panel: #111827;
+            --bg-card: #1e293b;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #070b14;
+            color: #f1f5f9;
+            overflow-x: hidden;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom Range Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #334155;
+            border-radius: 999px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #38bdf8;
+            cursor: pointer;
+            border: 2px solid #0f172a;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            background: #7dd3fc;
+        }
+        .math-serif {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-style: italic;
+        }
+        .canvas-glow {
+            box-shadow: 0 0 35px -10px rgba(56, 189, 248, 0.18), inset 0 0 0 1px rgba(148, 163, 184, 0.15);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-sky-500 selection:text-white">
+
+    <!-- Top Header -->
+    <header class="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-[1600px] mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 via-indigo-500 to-amber-500 p-[1px] shadow-lg shadow-sky-500/20">
+                    <div class="w-full h-full bg-slate-950 rounded-[11px] flex items-center justify-center font-bold text-sky-400 mono text-sm">
+                        K(x,x')
+                    </div>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2.5">
+                        <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">The Kernel Trick &amp; Probabilistic SVMs</h1>
+                        <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                            Interactive RKHS &amp; Dual Solver
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">From Explicit Feature Lifting <span class="mono text-slate-300">φ(x)</span> to Infinite-Dimensional Covariance Kernels &amp; Posterior Probabilities</p>
+                </div>
+            </div>
+
+            <!-- Stepper Quick Pills -->
+            <div class="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                <button onclick="setLessonStep(0)" id="step-pill-0" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all">
+                    1. Linear Bottleneck
+                </button>
+                <button onclick="setLessonStep(1)" id="step-pill-1" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all">
+                    2. Feature Lift φ(x)
+                </button>
+                <button onclick="setLessonStep(2)" id="step-pill-2" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all">
+                    3. The Kernel Trick
+                </button>
+                <button onclick="setLessonStep(3)" id="step-pill-3" class="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all">
+                    4. Probabilistic Lens
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-4 flex flex-col gap-4">
+
+        <!-- Guided Pedagogical Walkthrough Banner -->
+        <section class="bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/40 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="space-y-1.5 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span id="lesson-badge" class="px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            Step 1 of 4
+                        </span>
+                        <h2 id="lesson-title" class="text-base sm:text-lg font-bold text-white">
+                            The Linear Bottleneck in Input Space
+                        </h2>
+                    </div>
+                    <p id="lesson-body" class="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-4xl">
+                        <!-- Populated dynamically -->
+                    </p>
+                    <div id="lesson-action-hint" class="pt-1 flex flex-wrap items-center gap-2 text-xs text-sky-400 font-medium">
+                        <!-- Actionable hint populated dynamically -->
+                    </div>
+                </div>
+
+                <!-- Lesson Navigation Controls -->
+                <div class="flex items-center gap-2 shrink-0 self-end lg:self-center">
+                    <button onclick="prevLessonStep()" id="btn-prev-step" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium text-slate-200 border border-slate-700 transition flex items-center gap-1.5">
+                        <span>←</span> Previous
+                    </button>
+                    <button onclick="nextLessonStep()" id="btn-next-step" class="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs transition shadow-lg shadow-sky-500/20 flex items-center gap-1.5">
+                        Next Concept <span>→</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Control Bar + Dual Canvases Grid -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+
+            <!-- Left Control Sidebar (3 cols on XL) -->
+            <aside class="xl:col-span-3 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-5">
+                <!-- 1. Dataset Selection -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">1. Geometry / Dataset</label>
+                        <button onclick="resetCurrentDataset()" class="text-[11px] text-sky-400 hover:text-sky-300 underline">Reset Points</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="selectDataset('rings')" id="ds-rings" class="ds-btn px-3 py-2 rounded-xl text-xs font-medium border text-left transition flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-amber-400"></span> Concentric Rings
+                        </button>
+                        <button onclick="selectDataset('xor')" id="ds-xor" class="ds-btn px-3 py-2 rounded-xl text-xs font-medium border text-left transition flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-purple-400"></span> XOR Quadrants
+                        </button>
+                        <button onclick="selectDataset('moons')" id="ds-moons" class="ds-btn px-3 py-2 rounded-xl text-xs font-medium border text-left transition flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Twin Moons
+                        </button>
+                        <button onclick="selectDataset('linear')" id="ds-linear" class="ds-btn px-3 py-2 rounded-xl text-xs font-medium border text-left transition flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full bg-sky-400"></span> Linear Clusters
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 2. Kernel Selection -->
+                <div>
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block mb-2">2. Mercers Kernel <span class="mono text-sky-400">K(x, x')</span></label>
+                    <div class="space-y-1.5">
+                        <button onclick="selectKernel('linear')" id="kern-linear" class="kern-btn w-full px-3 py-2 rounded-xl text-left border transition flex items-center justify-between">
+                            <div>
+                                <div class="text-xs font-semibold text-white">Linear Inner Product</div>
+                                <div class="text-[11px] text-slate-400 mono">K(x,x') = xᵀx'</div>
+                            </div>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">dim = 2</span>
+                        </button>
+                        <button onclick="selectKernel('poly')" id="kern-poly" class="kern-btn w-full px-3 py-2 rounded-xl text-left border transition flex items-center justify-between">
+                            <div>
+                                <div class="text-xs font-semibold text-white">Quadratic / Paraboloid Lift</div>
+                                <div class="text-[11px] text-slate-400 mono">φ(x) = (x₁, x₂, x₁²+x₂²)</div>
+                            </div>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300">dim = 3+</span>
+                        </button>
+                        <button onclick="selectKernel('rbf')" id="kern-rbf" class="kern-btn w-full px-3 py-2 rounded-xl text-left border transition flex items-center justify-between">
+                            <div>
+                                <div class="text-xs font-semibold text-white">RBF / Gaussian Covariance</div>
+                                <div class="text-[11px] text-slate-400 mono">exp(-γ‖x - x'‖²)</div>
+                            </div>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300">dim = ∞</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Hyperparameter Sliders -->
+                <div class="space-y-4 pt-1 border-t border-slate-800/80">
+                    <!-- Feature Lift Slider -->
+                    <div class="bg-slate-950/70 p-3 rounded-xl border border-indigo-500/30">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-semibold text-indigo-300">3D Feature Lift <span class="mono">φ(x)</span></span>
+                            <span id="val-lift" class="mono text-indigo-400 font-bold">100%</span>
+                        </div>
+                        <input type="range" id="slider-lift" min="0" max="100" value="100" oninput="onLiftSliderChange(this.value)">
+                        <p class="text-[11px] text-slate-400 mt-1">
+                            Morphs the right 3D view from flat 2D input space (<span class="mono">0%</span>) into the lifted feature manifold (<span class="mono">100%</span>).
+                        </p>
+                    </div>
+
+                    <!-- Gamma (RBF Bandwidth / Lengthscale) -->
+                    <div id="gamma-control-group">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-300">RBF Precision <span class="mono text-sky-400">γ = 1/(2ℓ²)</span></span>
+                            <span id="val-gamma" class="mono text-sky-400 font-semibold">1.80</span>
+                        </div>
+                        <input type="range" id="slider-gamma" min="0.2" max="6.0" step="0.1" value="1.8" oninput="onHyperparamChange()">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                            <span>Broad Prior (Smooth)</span>
+                            <span>Tight Bumps (Overfit)</span>
+                        </div>
+                    </div>
+
+                    <!-- Regularization C -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-300">Box Constraint <span class="mono text-amber-400">C</span> (Prior Penalty)</span>
+                            <span id="val-c" class="mono text-amber-400 font-semibold">4.0</span>
+                        </div>
+                        <input type="range" id="slider-c" min="0.2" max="15.0" step="0.2" value="4.0" oninput="onHyperparamChange()">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                            <span>Wide Soft Margin</span>
+                            <span>Hard Margin (Strict)</span>
+                        </div>
+                    </div>
+
+                    <!-- Platt Scaling / Likelihood Sharpness -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-medium text-slate-300">Sigmoid Calibration <span class="mono text-emerald-400">β</span></span>
+                            <span id="val-beta" class="mono text-emerald-400 font-semibold">2.2</span>
+                        </div>
+                        <input type="range" id="slider-beta" min="0.5" max="5.0" step="0.1" value="2.2" oninput="onBetaChange()">
+                        <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                            <span>Diffuse Uncertainty</span>
+                            <span>Sharp Step Probability</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. Interactive Point Class Selector (Click on 2D canvas) -->
+                <div class="pt-2 border-t border-slate-800/80">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 block mb-2">Click 2D Canvas to Add Point</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="setAddPointClass(1)" id="btn-class-pos" class=" py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-orange-500 shadow shadow-orange-500/50"></span> Class +1 (Orange)
+                        </button>
+                        <button onclick="setAddPointClass(-1)" id="btn-class-neg" class="py-2 px-3 rounded-xl text-xs font-semibold border transition flex items-center justify-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-sky-400 shadow shadow-sky-400/50"></span> Class -1 (Blue)
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Dual Synchronized Canvases (9 cols on XL) -->
+            <div class="xl:col-span-9 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                <!-- LEFT CANVAS: 2D Input Space & Posterior Probability Field -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col canvas-glow">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-sky-400"></span>
+                                <h3 class="text-sm font-bold text-white">2D Input Space <span class="mono text-sky-400">𝒳 ∈ ℝ²</span></h3>
+                            </div>
+                            <p class="text-[11px] text-slate-400">Hover to probe kernel similarity rays <span class="mono text-slate-300">K(x*, xᵢ)</span> • Click to add point</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
+                                <input type="checkbox" id="chk-show-rays" checked onchange="renderAll()" class="accent-sky-400 rounded">
+                                <span>Kernel Rays</span>
+                            </label>
+                            <label class="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer bg-slate-800/90 px-2.5 py-1 rounded-lg border border-slate-700">
+                                <input type="checkbox" id="chk-show-margins" checked onchange="renderAll()" class="accent-sky-400 rounded">
+                                <span>Margins (±1)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 2D Canvas Container -->
+                    <div class="relative w-full aspect-square max-h-[460px] mx-auto rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                        <canvas id="canvas2d" class="w-full h-full cursor-crosshair block"></canvas>
+
+                        <!-- Floating Live Hover Readout Pill -->
+                        <div id="hover-pill-2d" class="pointer-events-none absolute top-3 left-3 bg-slate-950/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-3 py-2 text-xs shadow-lg transition-opacity duration-150 opacity-95">
+                            <div class="flex items-center gap-3">
+                                <div>
+                                    <div class="text-[10px] uppercase tracking-wider text-slate-400">Latent Margin <span class="mono">f(x*)</span></div>
+                                    <div id="readout-fx" class="mono font-bold text-sm text-white">+0.00</div>
+                                </div>
+                                <div class="h-6 w-[1px] bg-slate-800"></div>
+                                <div>
+                                    <div class="text-[10px] uppercase tracking-wider text-slate-400">Posterior <span class="mono">P(y=1|x*)</span></div>
+                                    <div id="readout-prob" class="mono font-bold text-sm text-amber-400">50.0%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Probability Colorbar Legend -->
+                    <div class="mt-3 pt-2 border-t border-slate-800/70 flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between text-[11px] text-slate-400">
+                            <span class="mono text-sky-400 font-medium">P(y=1|x) = 0.0 (Class -1)</span>
+                            <span class="mono text-white font-medium">Decision Boundary f(x)=0 (0.5)</span>
+                            <span class="mono text-orange-400 font-medium">P(y=1|x) = 1.0 (Class +1)</span>
+                        </div>
+                        <div class="h-2.5 w-full rounded-full bg-gradient-to-r from-sky-600 via-slate-200 to-orange-500 p-[1px]"></div>
+                        <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-1">
+                            <span class="flex items-center gap-1.5">
+                                <span class="inline-block w-3 h-3 rounded-full border-2 border-amber-300 bg-transparent"></span>
+                                Gold Halo = Support Vector (<span class="mono">αᵢ &gt; 0</span>)
+                            </span>
+                            <span class="flex items-center gap-1.5">
+                                <span class="inline-block w-4 border-b-2 border-dashed border-slate-300"></span>
+                                Margin <span class="mono">f(x) = ±1</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT CANVAS: 3D Lifted Feature Space / RKHS Decision Manifold -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 flex flex-col canvas-glow">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                                <h3 class="text-sm font-bold text-white" id="title-3d-view">3D Lifted Space <span class="mono text-indigo-400">φ(𝒳)</span> &amp; Hyperplane</h3>
+                            </div>
+                            <p class="text-[11px] text-slate-400">Drag to rotate 3D projection • Watch how a flat plane slices lifted points</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="set3DMode('lift')" id="btn-3d-lift" class="px-2.5 py-1 rounded-lg text-[11px] font-medium border transition">
+                                Explicit Lift φ(x)
+                            </button>
+                            <button onclick="set3DMode('surface')" id="btn-3d-surface" class="px-2.5 py-1 rounded-lg text-[11px] font-medium border transition">
+                                RKHS Surface f(x)
+                            </button>
+                            <button onclick="toggleAutoRotate()" id="btn-autorotate" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-slate-800 text-sky-400 border border-slate-700 hover:bg-slate-700 transition" title="Toggle Auto-Rotation">
+                                ↻ Spin
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3D Canvas Container -->
+                    <div class="relative w-full aspect-square max-h-[460px] mx-auto rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
+                        <canvas id="canvas3d" class="w-full h-full cursor-grab active:cursor-grabbing block"></canvas>
+
+                        <!-- 3D Overlay Badge -->
+                        <div class="pointer-events-none absolute top-3 left-3 bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-1.5 text-[11px] text-slate-300">
+                            <div id="badge-3d-formula" class="mono text-indigo-300 font-medium">
+                                z = φ₃(x) = x₁² + x₂²
+                            </div>
+                            <div id="badge-3d-sub" class="text-[10px] text-slate-400">
+                                Flat plane wᵀφ(x) + b = 0 slices paraboloid
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3D View Footer Explanation -->
+                    <div class="mt-3 pt-2 border-t border-slate-800/70 flex items-center justify-between text-[11px] text-slate-400">
+                        <div id="footer-3d-desc">
+                            Use the <span class="text-indigo-300 font-medium">3D Feature Lift φ(x)</span> slider on the left to animate lifting from 2D → 3D!
+                        </div>
+                        <button onclick="reset3DCamera()" class="text-sky-400 hover:text-sky-300 underline shrink-0 ml-2">Reset Angle</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bottom Real-Time Mathematical & Probabilistic Inspector -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+            <!-- Dual Expansion Live Equation Card (7 cols) -->
+            <div class="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[11px] mono font-semibold">Representer Theorem</span>
+                            <h3 class="text-sm font-bold text-white">Dual Expansion &amp; Sparse Support Vector Basis</h3>
+                        </div>
+                        <div class="text-xs text-slate-400">
+                            Active Support Vectors: <span id="sv-count-badge" class="mono font-bold text-amber-400">0 / 0</span>
+                        </div>
+                    </div>
+
+                    <!-- Symbolic & Live Formula Box -->
+                    <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3.5 mb-3">
+                        <div class="text-xs text-slate-400 mb-1 flex items-center justify-between">
+                            <span>Dual Decision Function &amp; Platt Posterior Probability:</span>
+                            <span id="bias-readout" class="mono text-slate-300">b = 0.00</span>
+                        </div>
+                        <div class="mono text-xs sm:text-sm text-slate-100 overflow-x-auto py-1">
+                            f(x*) = <span class="text-amber-300">∑<sub>i ∈ SV</sub> αᵢ yᵢ K(x*, xᵢ)</span> + b
+                            &nbsp;&nbsp;⟹&nbsp;&nbsp;
+                            P(y = 1 | x*) = <span class="text-emerald-400">σ(β · f(x*))</span> = <span id="live-eq-prob" class="font-bold text-white bg-slate-800 px-2 py-0.5 rounded">0.500</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Top Contributing Support Vectors to Hovered Point x* -->
+                <div>
+                    <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                        Live Kernel Similarity Breakdown at Probe <span id="probe-coords" class="mono text-sky-400">x* = (0.00, 0.00)</span>
+                    </div>
+                    <div id="sv-contributions-list" class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <!-- Dynamically populated cards for top 3 Support Vectors -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Probabilistic Machine Learning Connection Card (5 cols) -->
+            <div class="lg:col-span-5 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+                <div class="space-y-2.5">
+                    <div class="flex items-center gap-2">
+                        <span class="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[11px] font-semibold">Probabilistic ML Insight</span>
+                        <h3 class="text-sm font-bold text-white">Kernels as Covariance Priors (RKHS ↔ GP)</h3>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        In probabilistic machine learning, choosing a positive-definite kernel <span class="mono text-sky-300">K(x, x')</span> is equivalent to placing a <strong>Gaussian Process (GP) prior</strong> <span class="mono text-slate-200">f ~ 𝒢𝒫(0, K)</span> over the space of latent functions:
+                    </p>
+                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                        <li>
+                            <strong class="text-white">Prior Smoothness (<span class="mono text-sky-400">γ</span>):</strong> Controls how rapidly covariance decays with distance. Small <span class="mono">γ</span> enforces broad, smooth functions; large <span class="mono">γ</span> allows rapid local oscillations around each Support Vector.
+                        </li>
+                        <li>
+                            <strong class="text-white">MAP Estimation:</strong> The SVM objective minimizes regularized Hinge Loss <span class="mono text-amber-300">C ∑ max(0, 1 - yᵢf(xᵢ)) + ½‖f‖²<sub>ℋ</sub></span>, which acts as a Maximum A Posteriori (MAP) estimate in Reproducing Kernel Hilbert Space (<span class="mono">ℋ<sub>K</sub></span>).
+                        </li>
+                        <li>
+                            <strong class="text-white">Epistemic Uncertainty:</strong> Via Platt scaling <span class="mono text-emerald-400">P(y=1|x) = 1/(1 + exp(-β f(x)))</span>, points near the hyperplane (<span class="mono">f(x)=0</span>) exhibit maximum predictive entropy (<span class="mono">P=0.5</span>, white band).
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="mt-3 pt-2.5 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Mercer's Condition: <span class="mono text-slate-300">K(x,x') = ⟨φ(x), φ(x')⟩<sub>ℋ</sub> ≥ 0</span></span>
+                    <span id="kernel-eigen-status" class="text-emerald-400 font-medium">✓ Valid PSD Covariance</span>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        /***********************************************************************
+         * 1. APPLICATION STATE & PEDAGOGICAL WALKTHROUGH STEPS
+         ***********************************************************************/
+        const state = {
+            datasetName: 'rings',
+            kernelType: 'poly',     // 'linear' | 'poly' | 'rbf'
+            gamma: 1.8,             // RBF bandwidth parameter
+            C: 4.0,                 // SVM regularization box constraint
+            beta: 2.2,              // Platt scaling sigmoid slope
+            liftFactor: 1.0,        // 0.0 (flat 2D) to 1.0 (full 3D feature lift)
+            mode3D: 'lift',         // 'lift' (explicit feature space) or 'surface' (RKHS f(x) bumps)
+            autoRotate3D: true,
+            addClass: 1,            // +1 or -1 when clicking 2D canvas
+            lessonStep: 0,
+            points: [],             // Array of { x1, x2, y, alpha, isSV }
+            bias: 0,
+            // Linear weights in 3D lifted space (for exact 3D plane rendering in 'lift' mode)
+            w3d: [0, 0, 1],
+            b3d: 0,
+            // Interactive hover coordinate in 2D space [-1.5, 1.5]
+            probe: { x1: 0.35, x2: 0.35, active: true },
+            // 3D Camera Angles
+            cam: {
+                yaw: 0.65,
+                pitch: 0.48,
+                dragging: false,
+                lastX: 0,
+                lastY: 0
+            }
+        };
+
+        const LESSON_STEPS = [
+            {
+                badge: "Step 1 of 4 • Geometric Bottleneck",
+                title: "The Linear Bottleneck in 2D Input Space",
+                body: "Look at the Concentric Rings dataset on the left. Inner orange points (+1) are surrounded by outer blue points (-1). With a Linear Kernel K(x, x') = xᵀx', the SVM is restricted to drawing a single flat line in 2D. No matter how you rotate a straight line, it cannot separate an inner core from an outer ring—resulting in poor predictive probabilities everywhere.",
+                hint: "💡 Try clicking 'Next Concept →' or switch to the Quadratic / Paraboloid Lift kernel to see how adding a 3rd dimension solves this.",
+                config: {
+                    datasetName: 'rings',
+                    kernelType: 'linear',
+                    liftFactor: 0,
+                    mode3D: 'lift',
+                    C: 4.0,
+                    gamma: 1.8
+                }
+            },
+            {
+                badge: "Step 2 of 4 • Explicit Feature Mapping φ(x)",
+                title: "Lifting Data into Higher Dimensions: φ(x) = (x₁, x₂, x₁² + x₂²)",
+                body: "What if we map every 2D point (x₁, x₂) onto a 3D paraboloid by setting height z = x₁² + x₂²? Look at the 3D canvas on the right: inner orange points stay near the bottom of the bowl (low z), while outer blue points are pushed high up the rim! Now a simple FLAT 3D hyperplane wᵀφ(x) + b = 0 slices cleanly between the two classes. When projected back down to 2D on the left, that flat slice becomes a circular boundary!",
+                hint: "💡 Drag the '3D Feature Lift φ(x)' slider back and forth between 0% and 100% to watch the 2D rings physically lift into 3D and separate!",
+                config: {
+                    datasetName: 'rings',
+                    kernelType: 'poly',
+                    liftFactor: 100,
+                    mode3D: 'lift',
+                    C: 5.0,
+                    gamma: 1.8
+                }
+            },
+            {
+                badge: "Step 3 of 4 • The Kernel Trick & Infinite Dimensions",
+                title: "The Kernel Trick: Computing Inner Products Without Visiting φ(x)",
+                body: "Explicitly computing φ(x) explodes when we need degree-50 polynomials or infinite-dimensional features. Notice that the Dual SVM only ever needs inner products ⟨φ(x), φ(x')⟩! The Radial Basis Function (RBF) kernel K(x, x') = exp(-γ‖x - x'‖²) corresponds to an infinite-dimensional feature map, yet takes one simple exponential in 2D. Notice on the right how f(x) is built by placing smooth Gaussian bumps only at the sparse Support Vectors (gold halos).",
+                hint: "💡 Hover over the 2D canvas to see the Kernel Similarity Rays connecting your cursor x* to the Support Vectors, or switch datasets to Twin Moons / XOR!",
+                config: {
+                    datasetName: 'moons',
+                    kernelType: 'rbf',
+                    liftFactor: 100,
+                    mode3D: 'surface',
+                    C: 6.0,
+                    gamma: 2.2
+                }
+            },
+            {
+                badge: "Step 4 of 4 • Probabilistic Machine Learning Lens",
+                title: "RKHS Priors, Gaussian Processes & Posterior Uncertainty",
+                body: "In probabilistic ML, the kernel K(x, x') defines a prior covariance over smooth functions (as in Gaussian Processes). The heatmap on the left shows the calibrated posterior probability P(y=1 | x) = σ(β · f(x)). Along the white decision boundary (f(x) = 0), predictive uncertainty is maximal (P = 50%). Far inside the orange or blue territories, the latent margin |f(x)| grows large and epistemic uncertainty vanishes.",
+                hint: "💡 Adjust the 'RBF Precision γ' slider on the left: watch how high γ creates tight island pockets of confidence around Support Vectors, while low γ creates a broad, smooth prior!",
+                config: {
+                    datasetName: 'xor',
+                    kernelType: 'rbf',
+                    liftFactor: 100,
+                    mode3D: 'surface',
+                    C: 5.0,
+                    gamma: 1.8
+                }
+            }
+        ];
+
+        /***********************************************************************
+         * 2. SYNTHETIC DATASETS GENERATOR
+         ***********************************************************************/
+        function generateDataset(name) {
+            const pts = [];
+            // Seeded pseudo-random helper for clean, repeatable educational layouts
+            let seed = 42;
+            const rand = () => {
+                seed = (seed * 1664525 + 1013904223) % 4294967296;
+                return seed / 4294967296;
+            };
+            const randn = () => {
+                const u = Math.max(1e-6, rand());
+                const v = Math.max(1e-6, rand());
+                return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            };
+
+            if (name === 'rings') {
+                // Inner positive core (+1)
+                for (let i = 0; i < 14; i++) {
+                    const angle = (2 * Math.PI * i) / 14 + randn() * 0.1;
+                    const r = 0.35 + randn() * 0.08;
+                    pts.push({ x1: r * Math.cos(angle), x2: r * Math.sin(angle), y: 1, alpha: 0, isSV: false });
+                }
+                // Outer negative ring (-1)
+                for (let i = 0; i < 20; i++) {
+                    const angle = (2 * Math.PI * i) / 20 + randn() * 0.08;
+                    const r = 0.98 + randn() * 0.10;
+                    pts.push({ x1: r * Math.cos(angle), x2: r * Math.sin(angle), y: -1, alpha: 0, isSV: false });
+                }
+            } else if (name === 'xor') {
+                const centers = [
+                    { x: 0.65, y: 0.65, label: 1 },
+                    { x: -0.65, y: -0.65, label: 1 },
+                    { x: -0.65, y: 0.65, label: -1 },
+                    { x: 0.65, y: -0.65, label: -1 }
+                ];
+                centers.forEach(c => {
+                    for (let i = 0; i < 8; i++) {
+                        pts.push({
+                            x1: c.x + randn() * 0.22,
+                            x2: c.y + randn() * 0.22,
+                            y: c.label,
+                            alpha: 0,
+                            isSV: false
+                        });
+                    }
+                });
+            } else if (name === 'moons') {
+                // Upper crescent (+1)
+                for (let i = 0; i < 16; i++) {
+                    const t = (Math.PI * i) / 15;
+                    pts.push({
+                        x1: Math.cos(t) * 0.85 - 0.25 + randn() * 0.07,
+                        x2: Math.sin(t) * 0.75 - 0.15 + randn() * 0.07,
+                        y: 1,
+                        alpha: 0,
+                        isSV: false
+                    });
+                }
+                // Lower interlocking crescent (-1)
+                for (let i = 0; i < 16; i++) {
+                    const t = (Math.PI * i) / 15;
+                    pts.push({
+                        x1: 0.25 - Math.cos(t) * 0.85 + randn() * 0.07,
+                        x2: 0.15 - Math.sin(t) * 0.75 + randn() * 0.07,
+                        y: -1,
+                        alpha: 0,
+                        isSV: false
+                    });
+                }
+            } else if (name === 'linear') {
+                for (let i = 0; i < 15; i++) {
+                    pts.push({
+                        x1: -0.58 + randn() * 0.25,
+                        x2: 0.52 + randn() * 0.25,
+                        y: 1,
+                        alpha: 0,
+                        isSV: false
+                    });
+                    pts.push({
+                        x1: 0.58 + randn() * 0.25,
+                        x2: -0.52 + randn() * 0.25,
+                        y: -1,
+                        alpha: 0,
+                        isSV: false
+                    });
+                }
+            }
+            return pts;
+        }
+
+        /***********************************************************************
+         * 3. MERCER KERNELS & REAL-TIME SMO DUAL SVM SOLVER
+         ***********************************************************************/
+        // Compute Explicit 3D Lifted coordinates φ(x) = [φ₁, φ₂, φ₃]
+        function phi3D(x1, x2) {
+            if (state.kernelType === 'linear') {
+                return [x1, x2, 0];
+            } else if (state.kernelType === 'poly') {
+                // Paraboloid lift z = x1^2 + x2^2 (centered & scaled for visual clarity)
+                const r2 = x1 * x1 + x2 * x2;
+                return [x1, x2, r2];
+            } else {
+                // For RBF in 3D lift mode, show radial bump or latent height
+                const r2 = x1 * x1 + x2 * x2;
+                return [x1, x2, Math.exp(-state.gamma * r2)];
+            }
+        }
+
+        // Compute Kernel Function K(a, b)
+        function kernelEval(x1, x2, z1, z2) {
+            if (state.kernelType === 'linear') {
+                return x1 * z1 + x2 * z2;
+            } else if (state.kernelType === 'poly') {
+                // Inner product in lifted space φ(x) = (x1, x2, x1^2 + x2^2) plus inhomogeneous quadratic terms
+                const r2_x = x1 * x1 + x2 * x2;
+                const r2_z = z1 * z1 + z2 * z2;
+                return x1 * z1 + x2 * z2 + 1.35 * (r2_x * r2_z);
+            } else {
+                // RBF / Gaussian Covariance Kernel
+                const dx = x1 - z1;
+                const dy = x2 - z2;
+                return Math.exp(-state.gamma * (dx * dx + dy * dy));
+            }
+        }
+
+        // Evaluate Dual SVM Decision Function f(x1, x2)
+        function decisionFunction(x1, x2) {
+            let sum = state.bias;
+            const pts = state.points;
+            for (let i = 0; i < pts.length; i++) {
+                const p = pts[i];
+                if (p.alpha > 1e-5) {
+                    sum += p.alpha * p.y * kernelEval(x1, x2, p.x1, p.x2);
+                }
+            }
+            return sum;
+        }
+
+        // Platt-scaled Posterior Predictive Probability P(y=1 | x)
+        function predictProbability(x1, x2) {
+            const fx = decisionFunction(x1, x2);
+            return 1.0 / (1.0 + Math.exp(-state.beta * fx));
+        }
+
+        // Fast & Stable Sequential Minimal Optimization (SMO) Dual SVM Solver
+        function trainSVM() {
+            const pts = state.points;
+            const n = pts.length;
+            if (n === 0) return;
+
+            const C = state.C;
+            const tol = 1e-3;
+            const eps = 1e-5;
+
+            // Reset alphas
+            for (let i = 0; i < n; i++) {
+                pts[i].alpha = 0;
+                pts[i].isSV = false;
+            }
+            let b = 0;
+
+            // Precompute Gram Matrix K[i][j]
+            const K = Array.from({ length: n }, () => new Float64Array(n));
+            for (let i = 0; i < n; i++) {
+                for (let j = i; j < n; j++) {
+                    const kv = kernelEval(pts[i].x1, pts[i].x2, pts[j].x1, pts[j].x2);
+                    K[i][j] = kv;
+                    K[j][i] = kv;
+                }
+            }
+
+            // Helper to evaluate f(x_i) using cached Gram matrix
+            const evalIdx = (idx) => {
+                let s = b;
+                for (let j = 0; j < n; j++) {
+                    if (pts[j].alpha > 0) {
+                        s += pts[j].alpha * pts[j].y * K[idx][j];
+                    }
+                }
+                return s;
+            };
+
+            let passes = 0;
+            const maxPasses = 35;
+            let iter = 0;
+            const maxIter = 900;
+
+            while (passes < maxPasses && iter < maxIter) {
+                iter++;
+                let numChanged = 0;
+                for (let i = 0; i < n; i++) {
+                    const Ei = evalIdx(i) - pts[i].y;
+                    const yi = pts[i].y;
+                    const ai = pts[i].alpha;
+
+                    if ((yi * Ei < -tol && ai < C) || (yi * Ei > tol && ai > 0)) {
+                        // Pick j != i deterministically/cyclically for stability
+                        let j = (i + 1 + (iter * 7) % (n - 1)) % n;
+                        if (j === i) j = (i + 1) % n;
+
+                        const Ej = evalIdx(j) - pts[j].y;
+                        const yj = pts[j].y;
+                        const aj = pts[j].alpha;
+
+                        let L, H;
+                        if (yi !== yj) {
+                            L = Math.max(0, aj - ai);
+                            H = Math.min(C, C + aj - ai);
+                        } else {
+                            L = Math.max(0, ai + aj - C);
+                            H = Math.min(C, ai + aj);
+                        }
+                        if (Math.abs(L - H) < eps) continue;
+
+                        const eta = 2.0 * K[i][j] - K[i][i] - K[j][j];
+                        if (eta >= -1e-8) continue;
+
+                        let ajNew = aj - (yj * (Ei - Ej)) / eta;
+                        if (ajNew > H) ajNew = H;
+                        else if (ajNew < L) ajNew = L;
+
+                        if (Math.abs(ajNew - aj) < eps) continue;
+
+                        const aiNew = ai + yi * yj * (aj - ajNew);
+
+                        const b1 = b - Ei - yi * (aiNew - ai) * K[i][i] - yj * (ajNew - aj) * K[i][j];
+                        const b2 = b - Ej - yi * (aiNew - ai) * K[i][j] - yj * (ajNew - aj) * K[j][j];
+
+                        if (aiNew > 0 && aiNew < C) b = b1;
+                        else if (ajNew > 0 && ajNew < C) b = b2;
+                        else b = 0.5 * (b1 + b2);
+
+                        pts[i].alpha = aiNew;
+                        pts[j].alpha = ajNew;
+                        numChanged++;
+                    }
+                }
+                if (numChanged === 0) passes++;
+                else passes = 0;
+            }
+
+            state.bias = b;
+
+            // Identify Support Vectors and compute explicit 3D hyperplane weights for Poly/Linear lift
+            let wx = 0, wy = 0, wz = 0;
+            for (let i = 0; i < n; i++) {
+                if (pts[i].alpha > 1e-3) {
+                    pts[i].isSV = true;
+                    const coef = pts[i].alpha * pts[i].y;
+                    wx += coef * pts[i].x1;
+                    wy += coef * pts[i].x2;
+                    const r2 = pts[i].x1 * pts[i].x1 + pts[i].x2 * pts[i].x2;
+                    wz += coef * 1.35 * r2;
+                }
+            }
+            state.w3d = [wx, wy, wz];
+            state.b3d = b;
+        }
+
+        /***********************************************************************
+         * 4. COLORMAP & VISUALIZATION UTILITIES
+         ***********************************************************************/
+        // Maps probability p in [0, 1] to a rich Diverging Scientific Heatmap (Sky Blue -> White/Slate -> Orange/Red)
+        function probabilityToRGB(p) {
+            // Clamp p
+            const prob = Math.max(0, Math.min(1, p));
+            // Emphasize decision boundary (0.5) with a crisp bright neutral band
+            if (prob < 0.5) {
+                const t = prob / 0.5; // 0 (deep blue) -> 1 (neutral boundary)
+                const tCurve = Math.pow(t, 0.85);
+                // Deep Navy/Sky [14, 116, 190] -> Soft Neutral Slate/White [215, 225, 238]
+                const r = Math.round(12 + tCurve * (215 - 12));
+                const g = Math.round(85 + tCurve * (225 - 85));
+                const b = Math.round(165 + tCurve * (238 - 165));
+                return [r, g, b];
+            } else {
+                const t = (prob - 0.5) / 0.5; // 0 (neutral boundary) -> 1 (deep orange)
+                const tCurve = Math.pow(t, 0.85);
+                // Soft Neutral Slate/White [215, 225, 238] -> Vibrant Orange/Amber [234, 88, 12]
+                const r = Math.round(215 + tCurve * (234 - 215));
+                const g = Math.round(225 + tCurve * (88 - 225));
+                const b = Math.round(238 + tCurve * (20 - 238));
+                return [r, g, b];
+            }
+        }
+
+        /***********************************************************************
+         * 5. LEFT CANVAS: 2D INPUT SPACE & MARCHING SQUARES CONTOURS
+         ***********************************************************************/
+        const canvas2d = document.getElementById('canvas2d');
+        const ctx2d = canvas2d.getContext('2d');
+
+        // Coordinate conversion: domain is [-1.45, 1.45] x [-1.45, 1.45]
+        const DOMAIN_LIM = 1.45;
+        function worldToScreen2D(x1, x2, w, h) {
+            const sx = ((x1 + DOMAIN_LIM) / (2 * DOMAIN_LIM)) * w;
+            const sy = ((DOMAIN_LIM - x2) / (2 * DOMAIN_LIM)) * h;
+            return [sx, sy];
+        }
+        function screenToWorld2D(sx, sy, w, h) {
+            const x1 = (sx / w) * (2 * DOMAIN_LIM) - DOMAIN_LIM;
+            const x2 = DOMAIN_LIM - (sy / h) * (2 * DOMAIN_LIM);
+            return [x1, x2];
+        }
+
+        // Marching Squares contour tracer for f(x1, x2) = isoValue
+        function drawIsoContour2D(ctx, grid, gx, gy, isoValue, w, h, color, lineWidth, dashed = false) {
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            if (dashed) ctx.setLineDash([6, 5]);
+            else ctx.setLineDash([]);
+
+            ctx.beginPath();
+            const cellW = w / (gx - 1);
+            const cellH = h / (gy - 1);
+
+            for (let j = 0; j < gy - 1; j++) {
+                for (let i = 0; i < gx - 1; i++) {
+                    const v00 = grid[j * gx + i] - isoValue;
+                    const v10 = grid[j * gx + (i + 1)] - isoValue;
+                    const v11 = grid[(j + 1) * gx + (i + 1)] - isoValue;
+                    const v01 = grid[(j + 1) * gx + i] - isoValue;
+
+                    const x0 = i * cellW;
+                    const y0 = j * cellH;
+                    const x1 = (i + 1) * cellW;
+                    const y1 = (j + 1) * cellH;
+
+                    const pts = [];
+                    // Top edge (v00 -> v10)
+                    if ((v00 >= 0) !== (v10 >= 0)) {
+                        const t = v00 / (v00 - v10);
+                        pts.push([x0 + t * cellW, y0]);
+                    }
+                    // Right edge (v10 -> v11)
+                    if ((v10 >= 0) !== (v11 >= 0)) {
+                        const t = v10 / (v10 - v11);
+                        pts.push([x1, y0 + t * cellH]);
+                    }
+                    // Bottom edge (v01 -> v11)
+                    if ((v01 >= 0) !== (v11 >= 0)) {
+                        const t = v01 / (v01 - v11);
+                        pts.push([x0 + t * cellW, y1]);
+                    }
+                    // Left edge (v00 -> v01)
+                    if ((v00 >= 0) !== (v01 >= 0)) {
+                        const t = v00 / (v00 - v01);
+                        pts.push([x0, y0 + t * cellH]);
+                    }
+
+                    if (pts.length >= 2) {
+                        ctx.moveTo(pts[0][0], pts[0][1]);
+                        ctx.lineTo(pts[1][0], pts[1][1]);
+                    }
+                }
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Offscreen buffer for fast heatmap rendering
+        const heatCanvas = document.createElement('canvas');
+        const HEAT_RES = 84;
+        heatCanvas.width = HEAT_RES;
+        heatCanvas.height = HEAT_RES;
+        const heatCtx = heatCanvas.getContext('2d');
+
+        function render2DCanvas() {
+            const rect = canvas2d.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            if (canvas2d.width !== Math.round(rect.width * dpr) || canvas2d.height !== Math.round(rect.height * dpr)) {
+                canvas2d.width = Math.round(rect.width * dpr);
+                canvas2d.height = Math.round(rect.height * dpr);
+            }
+            const w = rect.width;
+            const h = rect.height;
+
+            ctx2d.save();
+            ctx2d.scale(dpr, dpr);
+
+            // 1. Evaluate f(x) and P(y=1|x) across HEAT_RES x HEAT_RES grid
+            const imgData = heatCtx.createImageData(HEAT_RES, HEAT_RES);
+            const data = imgData.data;
+            const fGrid = new Float32Array(HEAT_RES * HEAT_RES);
+
+            let idx = 0;
+            for (let j = 0; j < HEAT_RES; j++) {
+                const x2 = DOMAIN_LIM - (j / (HEAT_RES - 1)) * (2 * DOMAIN_LIM);
+                for (let i = 0; i < HEAT_RES; i++) {
+                    const x1 = (i / (HEAT_RES - 1)) * (2 * DOMAIN_LIM) - DOMAIN_LIM;
+                    const fx = decisionFunction(x1, x2);
+                    fGrid[j * HEAT_RES + i] = fx;
+
+                    const prob = 1.0 / (1.0 + Math.exp(-state.beta * fx));
+                    const [r, g, b] = probabilityToRGB(prob);
+
+                    data[idx++] = r;
+                    data[idx++] = g;
+                    data[idx++] = b;
+                    data[idx++] = 215; // slight translucency over dark background
+                }
+            }
+            heatCtx.putImageData(imgData, 0, 0);
+
+            // Clear & draw smooth interpolated probability field
+            ctx2d.fillStyle = '#070b14';
+            ctx2d.fillRect(0, 0, w, h);
+            ctx2d.imageSmoothingEnabled = true;
+            ctx2d.imageSmoothingQuality = 'high';
+            ctx2d.drawImage(heatCanvas, 0, 0, w, h);
+
+            // 2. Subtle Coordinate Grid & Axes
+            ctx2d.strokeStyle = 'rgba(15, 23, 42, 0.22)';
+            ctx2d.lineWidth = 1;
+            for (let g = -1.0; g <= 1.0; g += 0.5) {
+                const [sx] = worldToScreen2D(g, 0, w, h);
+                const [, sy] = worldToScreen2D(0, g, w, h);
+                ctx2d.beginPath();
+                ctx2d.moveTo(sx, 0); ctx2d.lineTo(sx, h);
+                ctx2d.moveTo(0, sy); ctx2d.lineTo(w, sy);
+                ctx2d.stroke();
+            }
+
+            // 3. Draw Margin Boundaries f(x) = +1 and f(x) = -1, plus Decision Boundary f(x) = 0
+            const showMargins = document.getElementById('chk-show-margins').checked;
+            if (showMargins) {
+                drawIsoContour2D(ctx2d, fGrid, HEAT_RES, HEAT_RES, 1.0, w, h, 'rgba(255, 255, 255, 0.75)', 1.6, true);
+                drawIsoContour2D(ctx2d, fGrid, HEAT_RES, HEAT_RES, -1.0, w, h, 'rgba(15, 23, 42, 0.75)', 1.6, true);
+            }
+            // Decision Boundary f(x) = 0
+            drawIsoContour2D(ctx2d, fGrid, HEAT_RES, HEAT_RES, 0.0, w, h, '#0f172a', 4.2, false);
+            drawIsoContour2D(ctx2d, fGrid, HEAT_RES, HEAT_RES, 0.0, w, h, '#ffffff', 2.2, false);
+
+            // 4. Draw Kernel Similarity Rays from Hovered Probe x* to Support Vectors
+            const showRays = document.getElementById('chk-show-rays').checked;
+            const [px, py] = worldToScreen2D(state.probe.x1, state.probe.x2, w, h);
+
+            if (showRays && state.probe.active) {
+                state.points.forEach(pt => {
+                    if (!pt.isSV) return;
+                    const kv = kernelEval(state.probe.x1, state.probe.x2, pt.x1, pt.x2);
+                    // Normalize ray intensity
+                    const weight = Math.min(1.0, Math.abs(kv));
+                    if (weight < 0.04) return;
+
+                    const [sx, sy] = worldToScreen2D(pt.x1, pt.x2, w, h);
+                    ctx2d.save();
+                    ctx2d.beginPath();
+                    ctx2d.moveTo(px, py);
+                    ctx2d.lineTo(sx, sy);
+                    ctx2d.strokeStyle = pt.y === 1
+                        ? `rgba(251, 146, 60, ${0.18 + 0.72 * weight})`
+                        : `rgba(56, 189, 248, ${0.18 + 0.72 * weight})`;
+                    ctx2d.lineWidth = 1.0 + 4.0 * weight;
+                    ctx2d.stroke();
+                    ctx2d.restore();
+                });
+            }
+
+            // 5. Draw Data Points & Support Vector Halos
+            state.points.forEach(pt => {
+                const [sx, sy] = worldToScreen2D(pt.x1, pt.x2, w, h);
+
+                // Support Vector glowing outer ring
+                if (pt.isSV) {
+                    const alphaRatio = Math.min(1, pt.alpha / state.C);
+                    const haloRadius = 10 + 4 * alphaRatio;
+
+                    ctx2d.beginPath();
+                    ctx2d.arc(sx, sy, haloRadius, 0, 2 * Math.PI);
+                    ctx2d.fillStyle = 'rgba(250, 204, 21, 0.18)';
+                    ctx2d.fill();
+                    ctx2d.lineWidth = 2.2;
+                    ctx2d.strokeStyle = '#fde047';
+                    ctx2d.stroke();
+                }
+
+                // Point body
+                ctx2d.beginPath();
+                ctx2d.arc(sx, sy, 5.5, 0, 2 * Math.PI);
+                ctx2d.fillStyle = pt.y === 1 ? '#f97316' : '#0ea5e9';
+                ctx2d.fill();
+                ctx2d.lineWidth = 1.8;
+                ctx2d.strokeStyle = '#0f172a';
+                ctx2d.stroke();
+            });
+
+            // 6. Draw Probe Reticle x*
+            if (state.probe.active) {
+                ctx2d.save();
+                ctx2d.beginPath();
+                ctx2d.arc(px, py, 7, 0, 2 * Math.PI);
+                ctx2d.strokeStyle = '#ffffff';
+                ctx2d.lineWidth = 2;
+                ctx2d.stroke();
+
+                ctx2d.beginPath();
+                ctx2d.arc(px, py, 2.5, 0, 2 * Math.PI);
+                ctx2d.fillStyle = '#fde047';
+                ctx2d.fill();
+
+                ctx2d.font = '600 11px "JetBrains Mono", monospace';
+                ctx2d.fillStyle = '#ffffff';
+                ctx2d.fillText('x*', px + 10, py - 8);
+                ctx2d.restore();
+            }
+
+            ctx2d.restore();
+        }
+
+        /***********************************************************************
+         * 6. RIGHT CANVAS: 3D FEATURE SPACE φ(X) & RKHS DECISION SURFACE
+         ***********************************************************************/
+        const canvas3d = document.getElementById('canvas3d');
+        const ctx3d = canvas3d.getContext('2d');
+
+        // Project 3D point (X, Y, Z) to 2D screen coordinates
+        // Note: X, Y in [-1.45, 1.45], Z centered around [-1, 1]
+        function project3D(X, Y, Z, w, h) {
+            const cosY = Math.cos(state.cam.yaw);
+            const sinY = Math.sin(state.cam.yaw);
+            const cosP = Math.cos(state.cam.pitch);
+            const sinP = Math.sin(state.cam.pitch);
+
+            // Rotate around vertical Z-axis (yaw), then tilt (pitch)
+            const rx = X * cosY - Y * sinY;
+            const ry = X * sinY + Y * cosY;
+
+            const camY = ry * cosP - Z * sinP;
+            const camZ = ry * sinP + Z * cosP;
+
+            const fov = Math.min(w, h) * 0.42;
+            const dist = 4.2;
+            const scale = fov / (dist + camY * 0.45);
+
+            const sx = w * 0.5 + rx * scale;
+            const sy = h * 0.54 - camZ * scale;
+            return { sx, sy, depth: camY, scale };
+        }
+
+        function render3DCanvas() {
+            const rect = canvas3d.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            if (canvas3d.width !== Math.round(rect.width * dpr) || canvas3d.height !== Math.round(rect.height * dpr)) {
+                canvas3d.width = Math.round(rect.width * dpr);
+                canvas3d.height = Math.round(rect.height * dpr);
+            }
+            const w = rect.width;
+            const h = rect.height;
+
+            ctx3d.save();
+            ctx3d.scale(dpr, dpr);
+
+            // Background radial glow
+            const grad = ctx3d.createRadialGradient(w * 0.5, h * 0.5, 10, w * 0.5, h * 0.5, w * 0.7);
+            grad.addColorStop(0, '#111a2e');
+            grad.addColorStop(1, '#070b14');
+            ctx3d.fillStyle = grad;
+            ctx3d.fillRect(0, 0, w, h);
+
+            const lift = state.liftFactor; // 0.0 to 1.0
+
+            // Draw 3D Base Reference Floor Grid at Z_floor = -0.75
+            const zFloor = -0.75;
+            ctx3d.strokeStyle = 'rgba(51, 65, 85, 0.45)';
+            ctx3d.lineWidth = 1;
+            const steps = 6;
+            for (let i = -steps; i <= steps; i++) {
+                const v = (i / steps) * 1.35;
+                const p1 = project3D(-1.35, v, zFloor, w, h);
+                const p2 = project3D(1.35, v, zFloor, w, h);
+                ctx3d.beginPath();
+                ctx3d.moveTo(p1.sx, p1.sy);
+                ctx3d.lineTo(p2.sx, p2.sy);
+                ctx3d.stroke();
+
+                const q1 = project3D(v, -1.35, zFloor, w, h);
+                const q2 = project3D(v, 1.35, zFloor, w, h);
+                ctx3d.beginPath();
+                ctx3d.moveTo(q1.sx, q1.sy);
+                ctx3d.lineTo(q2.sx, q2.sy);
+                ctx3d.stroke();
+            }
+
+            // Draw 3D Coordinate Axes from (-1.35, -1.35, zFloor)
+            const origin = project3D(-1.35, -1.35, zFloor, w, h);
+            const axX = project3D(1.45, -1.35, zFloor, w, h);
+            const axY = project3D(-1.35, 1.45, zFloor, w, h);
+            const axZ = project3D(-1.35, -1.35, 1.15, w, h);
+
+            ctx3d.lineWidth = 1.5;
+            ctx3d.strokeStyle = '#64748b';
+            ctx3d.beginPath();
+            ctx3d.moveTo(origin.sx, origin.sy); ctx3d.lineTo(axX.sx, axX.sy);
+            ctx3d.moveTo(origin.sx, origin.sy); ctx3d.lineTo(axY.sx, axY.sy);
+            ctx3d.moveTo(origin.sx, origin.sy); ctx3d.lineTo(axZ.sx, axZ.sy);
+            ctx3d.stroke();
+
+            ctx3d.font = '600 10px "JetBrains Mono", monospace';
+            ctx3d.fillStyle = '#94a3b8';
+            ctx3d.fillText('x₁', axX.sx + 4, axX.sy);
+            ctx3d.fillText('x₂', axY.sx + 4, axY.sy);
+            ctx3d.fillText(state.mode3D === 'lift' ? 'φ₃(x)' : 'f(x)', axZ.sx - 10, axZ.sy - 6);
+
+            const MESH_N = 20;
+
+            if (state.mode3D === 'lift') {
+                // ===============================================================
+                // MODE A: EXPLICIT FEATURE LIFT φ(x) = (x1, x2, z) & SLICING PLANE
+                // ===============================================================
+                // 1. Draw Lifted Paraboloid / Feature Manifold Wireframe
+                ctx3d.strokeStyle = 'rgba(99, 102, 241, 0.26)';
+                ctx3d.lineWidth = 1;
+
+                const getLiftZ = (x1, x2) => {
+                    const [, , rawZ] = phi3D(x1, x2);
+                    // Map rawZ into visual range [zFloor, +0.85]
+                    return zFloor + lift * (rawZ * 0.95);
+                };
+
+                for (let i = 0; i <= MESH_N; i += 2) {
+                    const u = ((i / MESH_N) * 2 - 1) * 1.25;
+                    ctx3d.beginPath();
+                    for (let j = 0; j <= MESH_N; j++) {
+                        const v = ((j / MESH_N) * 2 - 1) * 1.25;
+                        const z = getLiftZ(u, v);
+                        const p = project3D(u, v, z, w, h);
+                        if (j === 0) ctx3d.moveTo(p.sx, p.sy);
+                        else ctx3d.lineTo(p.sx, p.sy);
+                    }
+                    ctx3d.stroke();
+
+                    ctx3d.beginPath();
+                    for (let j = 0; j <= MESH_N; j++) {
+                        const v = ((j / MESH_N) * 2 - 1) * 1.25;
+                        const z = getLiftZ(v, u);
+                        const p = project3D(v, u, z, w, h);
+                        if (j === 0) ctx3d.moveTo(p.sx, p.sy);
+                        else ctx3d.lineTo(p.sx, p.sy);
+                    }
+                    ctx3d.stroke();
+                }
+
+                // 2. Draw the Slicing 3D Hyperplane w1*x1 + w2*x2 + w3*r^2 + b = 0
+                const [wx, wy, wz] = state.w3d;
+                const b = state.b3d;
+
+                if (Math.abs(wz) > 0.08 && lift > 0.15 && state.kernelType !== 'linear') {
+                    // Render translucent slicing plane in 3D!
+                    const planeGrid = 10;
+                    ctx3d.save();
+                    for (let i = 0; i < planeGrid; i++) {
+                        for (let j = 0; j < planeGrid; j++) {
+                            const x1a = ((i / planeGrid) * 2 - 1) * 1.2;
+                            const x1b = (((i + 1) / planeGrid) * 2 - 1) * 1.2;
+                            const x2a = ((j / planeGrid) * 2 - 1) * 1.2;
+                            const x2b = (((j + 1) / planeGrid) * 2 - 1) * 1.2;
+
+                            const calcPlaneZ = (x, y) => {
+                                const r2 = -(wx * x + wy * y + b) / wz;
+                                const zVal = zFloor + lift * (r2 * 0.95);
+                                return Math.max(-0.9, Math.min(1.1, zVal));
+                            };
+
+                            const p00 = project3D(x1a, x2a, calcPlaneZ(x1a, x2a), w, h);
+                            const p10 = project3D(x1b, x2a, calcPlaneZ(x1b, x2a), w, h);
+                            const p11 = project3D(x1b, x2b, calcPlaneZ(x1b, x2b), w, h);
+                            const p01 = project3D(x1a, x2b, calcPlaneZ(x1a, x2b), w, h);
+
+                            ctx3d.beginPath();
+                            ctx3d.moveTo(p00.sx, p00.sy);
+                            ctx3d.lineTo(p10.sx, p10.sy);
+                            ctx3d.lineTo(p11.sx, p11.sy);
+                            ctx3d.lineTo(p01.sx, p01.sy);
+                            ctx3d.closePath();
+                            ctx3d.fillStyle = 'rgba(56, 189, 248, 0.14)';
+                            ctx3d.fill();
+                            ctx3d.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                            ctx3d.lineWidth = 0.7;
+                            ctx3d.stroke();
+                        }
+                    }
+                    ctx3d.restore();
+                }
+
+                // 3. Depth-sort and draw Lifted 3D Data Points + Vertical Drop Stalks
+                const projectedPts = state.points.map(pt => {
+                    const zLifted = getLiftZ(pt.x1, pt.x2);
+                    const pTop = project3D(pt.x1, pt.x2, zLifted, w, h);
+                    const pBot = project3D(pt.x1, pt.x2, zFloor, w, h);
+                    return { pt, pTop, pBot };
+                });
+
+                // Sort back-to-front by depth
+                projectedPts.sort((a, b) => b.pTop.depth - a.pTop.depth);
+
+                projectedPts.forEach(({ pt, pTop, pBot }) => {
+                    // Vertical stalk showing physical lift from 2D floor to 3D feature manifold
+                    if (lift > 0.03) {
+                        ctx3d.beginPath();
+                        ctx3d.moveTo(pBot.sx, pBot.sy);
+                        ctx3d.lineTo(pTop.sx, pTop.sy);
+                        ctx3d.strokeStyle = pt.y === 1 ? 'rgba(249, 115, 22, 0.35)' : 'rgba(14, 165, 233, 0.35)';
+                        ctx3d.lineWidth = 1.2;
+                        ctx3d.stroke();
+                    }
+
+                    // Support Vector Halo in 3D
+                    if (pt.isSV) {
+                        ctx3d.beginPath();
+                        ctx3d.arc(pTop.sx, pTop.sy, 8.5, 0, 2 * Math.PI);
+                        ctx3d.strokeStyle = '#fde047';
+                        ctx3d.lineWidth = 2;
+                        ctx3d.stroke();
+                    }
+
+                    // 3D Sphere Point
+                    ctx3d.beginPath();
+                    ctx3d.arc(pTop.sx, pTop.sy, 5, 0, 2 * Math.PI);
+                    ctx3d.fillStyle = pt.y === 1 ? '#f97316' : '#0ea5e9';
+                    ctx3d.fill();
+                    ctx3d.strokeStyle = '#0f172a';
+                    ctx3d.lineWidth = 1.4;
+                    ctx3d.stroke();
+                });
+
+            } else {
+                // ===============================================================
+                // MODE B: RKHS DECISION SURFACE z = f(x1, x2) & Z=0 SLICING PLANE
+                // ===============================================================
+                // 1. Draw translucent Z = 0 Decision Hyperplane
+                const c00 = project3D(-1.3, -1.3, 0, w, h);
+                const c10 = project3D(1.3, -1.3, 0, w, h);
+                const c11 = project3D(1.3, 1.3, 0, w, h);
+                const c01 = project3D(-1.3, 1.3, 0, w, h);
+
+                ctx3d.beginPath();
+                ctx3d.moveTo(c00.sx, c00.sy);
+                ctx3d.lineTo(c10.sx, c10.sy);
+                ctx3d.lineTo(c11.sx, c11.sy);
+                ctx3d.lineTo(c01.sx, c01.sy);
+                ctx3d.closePath();
+                ctx3d.fillStyle = 'rgba(255, 255, 255, 0.09)';
+                ctx3d.fill();
+                ctx3d.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+                ctx3d.lineWidth = 1.2;
+                ctx3d.stroke();
+
+                // 2. Evaluate and render 3D surface mesh z = tanh(0.45 * f(x1, x2)) * lift
+                const surfGrid = 22;
+                const zScale = 0.65 * Math.max(0.15, lift);
+
+                for (let i = 0; i < surfGrid; i++) {
+                    for (let j = 0; j < surfGrid; j++) {
+                        const x1a = ((i / surfGrid) * 2 - 1) * 1.3;
+                        const x1b = (((i + 1) / surfGrid) * 2 - 1) * 1.3;
+                        const x2a = ((j / surfGrid) * 2 - 1) * 1.3;
+                        const x2b = (((j + 1) / surfGrid) * 2 - 1) * 1.3;
+
+                        const f00 = Math.tanh(0.45 * decisionFunction(x1a, x2a)) * zScale;
+                        const f10 = Math.tanh(0.45 * decisionFunction(x1b, x2a)) * zScale;
+                        const f11 = Math.tanh(0.45 * decisionFunction(x1b, x2b)) * zScale;
+                        const f01 = Math.tanh(0.45 * decisionFunction(x1a, x2b)) * zScale;
+
+                        const p00 = project3D(x1a, x2a, f00, w, h);
+                        const p10 = project3D(x1b, x2a, f10, w, h);
+                        const p11 = project3D(x1b, x2b, f11, w, h);
+                        const p01 = project3D(x1a, x2b, f01, w, h);
+
+                        const avgF = (f00 + f10 + f11 + f01) * 0.25;
+                        const prob = 1 / (1 + Math.exp(-state.beta * (avgF / Math.max(0.15, zScale))));
+                        const [r, g, b] = probabilityToRGB(prob);
+
+                        ctx3d.beginPath();
+                        ctx3d.moveTo(p00.sx, p00.sy);
+                        ctx3d.lineTo(p10.sx, p10.sy);
+                        ctx3d.lineTo(p11.sx, p11.sy);
+                        ctx3d.lineTo(p01.sx, p01.sy);
+                        ctx3d.closePath();
+                        ctx3d.fillStyle = `rgba(${r}, ${g}, ${b}, 0.28)`;
+                        ctx3d.fill();
+                        ctx3d.strokeStyle = Math.abs(avgF) < 0.06
+                            ? 'rgba(255, 255, 255, 0.75)'
+                            : `rgba(${r}, ${g}, ${b}, 0.55)`;
+                        ctx3d.lineWidth = Math.abs(avgF) < 0.06 ? 1.5 : 0.75;
+                        ctx3d.stroke();
+                    }
+                }
+
+                // 3. Draw Data Points anchored at their latent surface value f(x_i)
+                state.points.forEach(pt => {
+                    const fx = Math.tanh(0.45 * decisionFunction(pt.x1, pt.x2)) * zScale;
+                    const p = project3D(pt.x1, pt.x2, fx, w, h);
+
+                    if (pt.isSV) {
+                        ctx3d.beginPath();
+                        ctx3d.arc(p.sx, p.sy, 8, 0, 2 * Math.PI);
+                        ctx3d.strokeStyle = '#fde047';
+                        ctx3d.lineWidth = 2;
+                        ctx3d.stroke();
+                    }
+
+                    ctx3d.beginPath();
+                    ctx3d.arc(p.sx, p.sy, 4.5, 0, 2 * Math.PI);
+                    ctx3d.fillStyle = pt.y === 1 ? '#f97316' : '#0ea5e9';
+                    ctx3d.fill();
+                    ctx3d.strokeStyle = '#0f172a';
+                    ctx3d.lineWidth = 1.2;
+                    ctx3d.stroke();
+                });
+            }
+
+            ctx3d.restore();
+        }
+
+        /***********************************************************************
+         * 7. LIVE MATHEMATICAL & PROBABILISTIC INSPECTOR UPDATES
+         ***********************************************************************/
+        function updateInspectorUI() {
+            const pts = state.points;
+            const svs = pts.filter(p => p.isSV);
+
+            document.getElementById('sv-count-badge').textContent = `${svs.length} / ${pts.length} pts`;
+            document.getElementById('bias-readout').textContent = `b = ${state.bias >= 0 ? '+' : ''}${state.bias.toFixed(2)}`;
+
+            const x1 = state.probe.x1;
+            const x2 = state.probe.x2;
+            const fx = decisionFunction(x1, x2);
+            const prob = predictProbability(x1, x2);
+
+            // Update 2D floating pill
+            const fxEl = document.getElementById('readout-fx');
+            fxEl.textContent = `${fx >= 0 ? '+' : ''}${fx.toFixed(2)}`;
+            fxEl.className = `mono font-bold text-sm ${fx >= 0 ? 'text-orange-400' : 'text-sky-400'}`;
+
+            const probEl = document.getElementById('readout-prob');
+            probEl.textContent = `${(prob * 100).toFixed(1)}%`;
+
+            // Update bottom equation inspector
+            document.getElementById('live-eq-prob').textContent = prob.toFixed(3);
+            document.getElementById('probe-coords').textContent = `x* = (${x1.toFixed(2)}, ${x2.toFixed(2)})`;
+
+            // Compute top 3 Support Vector contributions at probe x*
+            const contributions = svs.map((sv, idx) => {
+                const kv = kernelEval(x1, x2, sv.x1, sv.x2);
+                const term = sv.alpha * sv.y * kv;
+                return { sv, idx: idx + 1, kv, term };
+            }).sort((a, b) => Math.abs(b.term) - Math.abs(a.term)).slice(0, 3);
+
+            const listEl = document.getElementById('sv-contributions-list');
+            if (contributions.length === 0) {
+                listEl.innerHTML = `<div class="col-span-3 text-xs text-slate-500 italic">No active Support Vectors found.</div>`;
+            } else {
+                listEl.innerHTML = contributions.map(item => {
+                    const isPos = item.sv.y === 1;
+                    const sign = item.term >= 0 ? '+' : '';
+                    return `
+                        <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5 flex flex-col justify-between">
+                            <div class="flex items-center justify-between text-[11px] mb-1">
+                                <span class="font-semibold ${isPos ? 'text-orange-400' : 'text-sky-400'}">
+                                    SV (${item.sv.x1.toFixed(1)}, ${item.sv.x2.toFixed(1)}) [y=${isPos ? '+1' : '-1'}]
+                                </span>
+                                <span class="mono text-amber-300 text-[10px]">α=${item.sv.alpha.toFixed(2)}</span>
+                            </div>
+                            <div class="flex items-center justify-between text-xs mono">
+                                <span class="text-slate-400">K(x*, xᵢ) = <strong class="text-slate-200">${item.kv.toFixed(2)}</strong></span>
+                                <span class="font-bold ${item.term >= 0 ? 'text-orange-400' : 'text-sky-400'}">${sign}${item.term.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            // Update 3D Overlay Formula Badge
+            const badgeFormula = document.getElementById('badge-3d-formula');
+            const badgeSub = document.getElementById('badge-3d-sub');
+            if (state.mode3D === 'lift') {
+                if (state.kernelType === 'poly') {
+                    badgeFormula.textContent = 'φ(x) = (x₁, x₂, x₁² + x₂²)';
+                    badgeSub.textContent = 'Flat 3D hyperplane wᵀφ(x) + b = 0 slices paraboloid';
+                } else if (state.kernelType === 'linear') {
+                    badgeFormula.textContent = 'φ(x) = (x₁, x₂, 0) [Flat 2D]';
+                    badgeSub.textContent = 'No non-linear feature lift available in Linear kernel';
+                } else {
+                    badgeFormula.textContent = 'Radial Basis Feature Projection';
+                    badgeSub.textContent = 'Switch to "RKHS Surface f(x)" to see full sum of Gaussians!';
+                }
+            } else {
+                badgeFormula.textContent = 'z = f(x) = ∑ αᵢ yᵢ K(x, xᵢ) + b';
+                badgeSub.textContent = 'RKHS latent function sliced by z = 0 plane (white)';
+            }
+        }
+
+        /***********************************************************************
+         * 8. INTERACTIVE UI HANDLERS & CONTROLS
+         ***********************************************************************/
+        function updateButtonStyles() {
+            // Dataset buttons
+            ['rings', 'xor', 'moons', 'linear'].forEach(ds => {
+                const btn = document.getElementById(`ds-${ds}`);
+                if (state.datasetName === ds) {
+                    btn.className = 'ds-btn px-3 py-2 rounded-xl text-xs font-semibold border bg-sky-500/15 border-sky-500/50 text-white text-left transition flex items-center gap-2 shadow-sm';
+                } else {
+                    btn.className = 'ds-btn px-3 py-2 rounded-xl text-xs font-medium border bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700 text-left transition flex items-center gap-2';
+                }
+            });
+
+            // Kernel buttons
+            ['linear', 'poly', 'rbf'].forEach(k => {
+                const btn = document.getElementById(`kern-${k}`);
+                if (state.kernelType === k) {
+                    btn.className = 'kern-btn w-full px-3 py-2 rounded-xl text-left border bg-sky-500/15 border-sky-500/50 transition flex items-center justify-between shadow-sm';
+                } else {
+                    btn.className = 'kern-btn w-full px-3 py-2 rounded-xl text-left border bg-slate-950/60 border-slate-800 hover:border-slate-700 transition flex items-center justify-between opacity-80 hover:opacity-100';
+                }
+            });
+
+            // Gamma slider visibility emphasis
+            const gammaGroup = document.getElementById('gamma-control-group');
+            gammaGroup.style.opacity = state.kernelType === 'rbf' ? '1.0' : '0.45';
+
+            // 3D Mode buttons
+            const btnLift = document.getElementById('btn-3d-lift');
+            const btnSurf = document.getElementById('btn-3d-surface');
+            if (state.mode3D === 'lift') {
+                btnLift.className = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 transition';
+                btnSurf.className = 'px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-800/80 text-slate-400 border border-slate-700 hover:text-slate-200 transition';
+            } else {
+                btnSurf.className = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 transition';
+                btnLift.className = 'px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-800/80 text-slate-400 border border-slate-700 hover:text-slate-200 transition';
+            }
+
+            // Add Point Class buttons
+            const btnPos = document.getElementById('btn-class-pos');
+            const btnNeg = document.getElementById('btn-class-neg');
+            if (state.addClass === 1) {
+                btnPos.className = 'py-2 px-3 rounded-xl text-xs font-semibold border bg-orange-500/20 border-orange-500/50 text-orange-300 transition flex items-center justify-center gap-1.5';
+                btnNeg.className = 'py-2 px-3 rounded-xl text-xs font-medium border bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+            } else {
+                btnNeg.className = 'py-2 px-3 rounded-xl text-xs font-semibold border bg-sky-500/20 border-sky-500/50 text-sky-300 transition flex items-center justify-center gap-1.5';
+                btnPos.className = 'py-2 px-3 rounded-xl text-xs font-medium border bg-slate-950/60 border-slate-800 text-slate-400 hover:text-slate-200 transition flex items-center justify-center gap-1.5';
+            }
+
+            // Lesson Stepper Pills
+            for (let i = 0; i < 4; i++) {
+                const pill = document.getElementById(`step-pill-${i}`);
+                if (state.lessonStep === i) {
+                    pill.className = 'px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-sky-500 text-slate-950 shadow transition-all';
+                } else {
+                    pill.className = 'px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-all';
+                }
+            }
+
+            document.getElementById('btn-prev-step').disabled = (state.lessonStep === 0);
+            document.getElementById('btn-next-step').disabled = (state.lessonStep === LESSON_STEPS.length - 1);
+        }
+
+        function selectDataset(name) {
+            state.datasetName = name;
+            state.points = generateDataset(name);
+            trainSVM();
+            updateButtonStyles();
+            renderAll();
+        }
+
+        function resetCurrentDataset() {
+            state.points = generateDataset(state.datasetName);
+            trainSVM();
+            renderAll();
+        }
+
+        function selectKernel(kType) {
+            state.kernelType = kType;
+            // Automatically pick the most illuminating 3D view for the chosen kernel
+            if (kType === 'poly' && state.datasetName === 'rings') {
+                state.mode3D = 'lift';
+                if (state.liftFactor < 0.2) {
+                    state.liftFactor = 1.0;
+                    document.getElementById('slider-lift').value = 100;
+                    document.getElementById('val-lift').textContent = '100%';
+                }
+            } else if (kType === 'rbf') {
+                state.mode3D = 'surface';
+            }
+            trainSVM();
+            updateButtonStyles();
+            renderAll();
+        }
+
+        function onLiftSliderChange(val) {
+            state.liftFactor = parseFloat(val) / 100.0;
+            document.getElementById('val-lift').textContent = `${Math.round(val)}%`;
+            renderAll();
+        }
+
+        function onHyperparamChange() {
+            state.gamma = parseFloat(document.getElementById('slider-gamma').value);
+            state.C = parseFloat(document.getElementById('slider-c').value);
+            document.getElementById('val-gamma').textContent = state.gamma.toFixed(2);
+            document.getElementById('val-c').textContent = state.C.toFixed(1);
+            trainSVM();
+            renderAll();
+        }
+
+        function onBetaChange() {
+            state.beta = parseFloat(document.getElementById('slider-beta').value);
+            document.getElementById('val-beta').textContent = state.beta.toFixed(1);
+            renderAll();
+        }
+
+        function set3DMode(mode) {
+            state.mode3D = mode;
+            updateButtonStyles();
+            renderAll();
+        }
+
+        function toggleAutoRotate() {
+            state.autoRotate3D = !state.autoRotate3D;
+            const btn = document.getElementById('btn-autorotate');
+            btn.className = state.autoRotate3D
+                ? 'px-2 py-1 rounded-lg text-[11px] font-medium bg-sky-500/20 text-sky-300 border border-sky-500/40 transition'
+                : 'px-2 py-1 rounded-lg text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700 transition';
+        }
+
+        function reset3DCamera() {
+            state.cam.yaw = 0.65;
+            state.cam.pitch = 0.48;
+            render3DCanvas();
+        }
+
+        function setAddPointClass(cls) {
+            state.addClass = cls;
+            updateButtonStyles();
+        }
+
+        // Guided Lesson Stepper Controller
+        function setLessonStep(idx) {
+            state.lessonStep = Math.max(0, Math.min(LESSON_STEPS.length - 1, idx));
+            const step = LESSON_STEPS[state.lessonStep];
+
+            document.getElementById('lesson-badge').textContent = step.badge;
+            document.getElementById('lesson-title').textContent = step.title;
+            document.getElementById('lesson-body').textContent = step.body;
+            document.getElementById('lesson-action-hint').textContent = step.hint;
+
+            // Apply lesson configuration
+            const cfg = step.config;
+            if (state.datasetName !== cfg.datasetName) {
+                state.datasetName = cfg.datasetName;
+                state.points = generateDataset(cfg.datasetName);
+            }
+            state.kernelType = cfg.kernelType;
+            state.mode3D = cfg.mode3D;
+            state.C = cfg.C;
+            state.gamma = cfg.gamma;
+            state.liftFactor = cfg.liftFactor / 100.0;
+
+            // Sync sliders
+            document.getElementById('slider-lift').value = cfg.liftFactor;
+            document.getElementById('val-lift').textContent = `${cfg.liftFactor}%`;
+            document.getElementById('slider-c').value = cfg.C;
+            document.getElementById('val-c').textContent = cfg.C.toFixed(1);
+            document.getElementById('slider-gamma').value = cfg.gamma;
+            document.getElementById('val-gamma').textContent = cfg.gamma.toFixed(2);
+
+            trainSVM();
+            updateButtonStyles();
+            renderAll();
+        }
+
+        function prevLessonStep() {
+            if (state.lessonStep > 0) setLessonStep(state.lessonStep - 1);
+        }
+        function nextLessonStep() {
+            if (state.lessonStep < LESSON_STEPS.length - 1) setLessonStep(state.lessonStep + 1);
+        }
+
+        /***********************************************************************
+         * 9. CANVAS MOUSE & TOUCH INTERACTION LISTENERS
+         ***********************************************************************/
+        // 2D Canvas Hover & Click to Add Data Point
+        canvas2d.addEventListener('mousemove', (e) => {
+            const rect = canvas2d.getBoundingClientRect();
+            const sx = e.clientX - rect.left;
+            const sy = e.clientY - rect.top;
+            const [x1, x2] = screenToWorld2D(sx, sy, rect.width, rect.height);
+            state.probe.x1 = Math.max(-DOMAIN_LIM, Math.min(DOMAIN_LIM, x1));
+            state.probe.x2 = Math.max(-DOMAIN_LIM, Math.min(DOMAIN_LIM, x2));
+            state.probe.active = true;
+            render2DCanvas();
+            updateInspectorUI();
+        });
+
+        canvas2d.addEventListener('click', (e) => {
+            const rect = canvas2d.getBoundingClientRect();
+            const sx = e.clientX - rect.left;
+            const sy = e.clientY - rect.top;
+            const [x1, x2] = screenToWorld2D(sx, sy, rect.width, rect.height);
+            state.points.push({
+                x1: Math.max(-1.35, Math.min(1.35, x1)),
+                x2: Math.max(-1.35, Math.min(1.35, x2)),
+                y: state.addClass,
+                alpha: 0,
+                isSV: false
+            });
+            trainSVM();
+            renderAll();
+        });
+
+        // 3D Canvas Drag-to-Rotate (Mouse & Touch)
+        canvas3d.addEventListener('mousedown', (e) => {
+            state.cam.dragging = true;
+            state.cam.lastX = e.clientX;
+            state.cam.lastY = e.clientY;
+        });
+        window.addEventListener('mouseup', () => {
+            state.cam.dragging = false;
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!state.cam.dragging) return;
+            const dx = e.clientX - state.cam.lastX;
+            const dy = e.clientY - state.cam.lastY;
+            state.cam.lastX = e.clientX;
+            state.cam.lastY = e.clientY;
+
+            state.cam.yaw += dx * 0.008;
+            state.cam.pitch = Math.max(0.1, Math.min(1.35, state.cam.pitch + dy * 0.008));
+            render3DCanvas();
+        });
+
+        canvas3d.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                state.cam.dragging = true;
+                state.cam.lastX = e.touches[0].clientX;
+                state.cam.lastY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        window.addEventListener('touchend', () => {
+            state.cam.dragging = false;
+        });
+        window.addEventListener('touchmove', (e) => {
+            if (!state.cam.dragging || e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - state.cam.lastX;
+            const dy = e.touches[0].clientY - state.cam.lastY;
+            state.cam.lastX = e.touches[0].clientX;
+            state.cam.lastY = e.touches[0].clientY;
+
+            state.cam.yaw += dx * 0.008;
+            state.cam.pitch = Math.max(0.1, Math.min(1.35, state.cam.pitch + dy * 0.008));
+            render3DCanvas();
+        }, { passive: true });
+
+        function renderAll() {
+            render2DCanvas();
+            render3DCanvas();
+            updateInspectorUI();
+        }
+
+        // Animation loop for smooth 3D rotation
+        function animateLoop() {
+            if (state.autoRotate3D && !state.cam.dragging) {
+                state.cam.yaw += 0.0045;
+                render3DCanvas();
+            }
+            requestAnimationFrame(animateLoop);
+        }
+
+        window.addEventListener('resize', () => {
+            renderAll();
+        });
+
+        window.onload = function () {
+            // Start on Step 2 (Feature Lift φ(x) on Concentric Rings) or Step 1 as structured
+            setLessonStep(1);
+            animateLoop();
+        };
+    </script>
+</body>
+</html>
